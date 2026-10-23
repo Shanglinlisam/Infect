@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>传染病数据库系统（甲乙丙三类 · 42种 2026.4新版）</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui,sans-serif;}
+body{max-width:1300px;margin:20px auto;padding:0 16px;background:#f6f8fa;}
+.card{background:#fff;padding:20px;border-radius:12px;margin-bottom:16px;box-shadow:0 1px 4px #00000018;display:flex;gap:24px;align-items:flex-start;}
+.card-left{flex:0 0 480px;}
+.card-right{flex:1;padding:12px;background:#f1f5f9;border-radius:8px;min-height:120px;white-space:pre-wrap;}
+h1{text-align:center;color:#222;font-size:24px;}
+h3{margin-top:0;}
+.btn{padding:8px 14px;border:none;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;margin:4px 0;}
+.btn:hover{background:#1d4ed8;}
+input,select{padding:8px;width:300px;border:1px solid #ccc;border-radius:6px;margin:6px 0;}
+label{display:inline-block;margin-right:8px;}
+.vacc-tag{color:#16a34a;font-weight:600;}
+.warn-note{color:#666;margin:0 0 16px 0;}
+/* 饼图canvas样式 */
+#pieCanvas{max-width:320px;max-height:320px;margin:8px 0;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-left">
+    <p class="warn-note">⚠️免责声明：本系统为科普学习数据库，仅供学生科创展示，非国家官方传染病报告系统，不用于临床诊断。</p>
+  </div>
+  <div class="card-right">无输出</div>
+</div>
+<div style="text-align:center;background:#fff;padding:16px;border-radius:12px;margin-bottom:16px;">
+  <h1 style="margin:0;">传染病数据库系统（甲乙丙三类 · 42种 2026.4新版）</h1>
+</div>
+
+<!-- 1.数据库统计 -->
+<div class="card">
+  <div class="card-left">
+    <h3>📊 数据库统计</h3>
+    <button class="btn" onclick="countDB()">统计数量</button>
+  </div>
+  <div class="card-right" id="res-stat">等待统计</div>
+</div>
+
+<!-- 2.查询传染病 -->
+<div class="card">
+  <div class="card-left">
+    <h3>🔍 查询传染病（输入病名）</h3>
+    <input id="searchName" placeholder="例如：基孔肯雅热">
+    <button class="btn" onclick="searchDisease()">查询</button>
+  </div>
+  <div class="card-right" id="res-search">等待查询</div>
+</div>
+
+<!-- 3.症状自诊（增加饼图Canvas） -->
+<div class="card">
+  <div class="card-left">
+    <h3>🩺 症状自诊（多个症状空格分隔）</h3>
+    <input id="symInput" placeholder="高热 血小板减少 皮疹">
+    <button class="btn" onclick="symptomDiagnose()">开始匹配</button>
+  </div>
+  <div class="card-right" id="res-sym">
+    <canvas id="pieCanvas" width="300" height="300"></canvas>
+    <div id="symTextResult"></div>
+  </div>
+</div>
+
+<!-- 4.疫苗接种统计 -->
+<div class="card">
+  <div class="card-left">
+    <h3>💉 疫苗接种统计（选定疾病 + 疫苗名称）</h3>
+    <p>选择传染病：<select id="diseaseSel" onchange="showVaccineName()"></select></p>
+    <p>对应疫苗名称：<span id="vaccName" class="vacc-tag">—</span></p>
+    <p>班级总人数：<input id="totalStu" type="number" min="0"></p>
+    <p>已接种该疫苗人数：<input id="vaccStu" type="number" min="0"></p>
+    <button class="btn" onclick="vaccCalc()">计算接种率 & 风险评估</button>
+  </div>
+  <div class="card-right" id="res-vacc">等待计算接种率</div>
+</div>
+
+<script>
+const disease_db = [
+{id:1,name:"鼠疫",category:"甲类",pathogen:"鼠疫耶尔森菌",transmission:"鼠蚤叮咬、呼吸道飞沫、皮肤接触",symptom:"高热、淋巴结肿痛、出血倾向、肺部炎症",has_vaccine:true,vaccine_name:"鼠疫减毒活疫苗",note:"甲类强制管理，发现后需紧急上报"},
+{id:2,name:"霍乱",category:"甲类",pathogen:"霍乱弧菌",transmission:"污染水源、食物消化道传播",symptom:"剧烈上吐下泻、米泔水样便、严重脱水",has_vaccine:true,vaccine_name:"口服霍乱疫苗（rBS/WC）",note:"甲类强制管理，快速脱水可致死"},
+{id:3,name:"新型冠状病毒感染",category:"乙类",pathogen:"新冠病毒",transmission:"呼吸道飞沫、密切接触",symptom:"发热、干咳、乏力、咽痛",has_vaccine:true,vaccine_name:"新冠疫苗（灭活/重组蛋白）",note:"乙类传染病"},
+{id:4,name:"传染性非典型肺炎",category:"乙类",pathogen:"SARS冠状病毒",transmission:"呼吸道飞沫",symptom:"高热、呼吸困难、肺部病变",has_vaccine:false,vaccine_name:"无",note:"乙类传染病，甲类管理"},
+{id:5,name:"艾滋病",category:"乙类",pathogen:"人类免疫缺陷病毒HIV",transmission:"血液、性接触、母婴",symptom:"免疫力持续下降，各种机会性感染",has_vaccine:false,vaccine_name:"无",note:"不可治愈，可药物长期控制"},
+{id:6,name:"病毒性肝炎（甲肝）",category:"乙类",pathogen:"甲肝病毒",transmission:"消化道，被污染食物水",symptom:"乏力、食欲差、黄疸、肝肿大",has_vaccine:true,vaccine_name:"甲型肝炎疫苗（灭活/减毒活）",note:"急性肝炎，多数预后良好"},
+{id:7,name:"病毒性肝炎（乙肝）",category:"乙类",pathogen:"乙肝病毒",transmission:"血液、母婴、性接触",symptom:"乏力、黄疸，慢性可发展肝硬化",has_vaccine:true,vaccine_name:"重组乙型肝炎疫苗（CHO/酵母）",note:"校园重点筛查传染病"},
+{id:8,name:"脊髓灰质炎",category:"乙类",pathogen:"脊髓灰质炎病毒",transmission:"消化道",symptom:"发热，肢体弛缓性瘫痪",has_vaccine:true,vaccine_name:"脊灰疫苗（IPV灭活/OPV减毒活）",note:"俗称小儿麻痹症，乙类传染病，甲类管理"},
+{id:9,name:"人感染新亚型流感",category:"乙类",pathogen:"甲型流感新亚型病毒",transmission:"接触病禽、呼吸道飞沫",symptom:"高热、重症肺炎、呼吸困难",has_vaccine:false,vaccine_name:"无（储备疫苗）",note:"新亚型禽流感，警惕跨物种传播"},
+{id:10,name:"麻疹",category:"乙类",pathogen:"麻疹病毒",transmission:"呼吸道飞沫",symptom:"高热、口腔麻疹黏膜斑、全身皮疹",has_vaccine:true,vaccine_name:"麻腮风联合疫苗（MMR）",note:"传染性极强"},
+{id:11,name:"流行性出血热",category:"乙类",pathogen:"汉坦病毒",transmission:"鼠类排泄物气溶胶",symptom:"发热、出血、肾脏损害",has_vaccine:true,vaccine_name:"双价肾综合征出血热灭活疫苗",note:"野鼠为主要传染源"},
+{id:12,name:"狂犬病",category:"乙类",pathogen:"狂犬病毒",transmission:"患病动物咬伤抓伤",symptom:"恐水、怕风、咽肌痉挛",has_vaccine:true,vaccine_name:"狂犬病疫苗（Vero细胞纯化）",note:"发病后病死率接近100%"},
+{id:13,name:"流行性乙型脑炎",category:"乙类",pathogen:"乙脑病毒",transmission:"蚊虫叮咬",symptom:"高热、意识障碍、抽搐",has_vaccine:true,vaccine_name:"乙脑减毒活疫苗/灭活疫苗",note:"夏秋季高发"},
+{id:14,name:"登革热",category:"乙类",pathogen:"登革病毒",transmission:"伊蚊叮咬",symptom:"高热、剧烈头痛、肌肉关节痛",has_vaccine:true,vaccine_name:"登革热四价减毒活疫苗",note:"热带亚热带高发，国内暂未常规普及"},
+{id:15,name:"猴痘",category:"乙类",pathogen:"猴痘病毒",transmission:"密切接触、呼吸道飞沫、接触污染物",symptom:"发热、皮疹、淋巴结肿大",has_vaccine:true,vaccine_name:"猴痘疫苗（Jynneos）",note:"乙类传染病，传染性低于天花"},
+{id:16,name:"基孔肯雅热",category:"乙类",pathogen:"基孔肯雅病毒",transmission:"伊蚊叮咬传播",symptom:"发热、皮疹、剧烈关节肌肉疼痛",has_vaccine:false,vaccine_name:"无可用人用疫苗",note:"2026年4月1日本项目新增乙类，输入性风险高，重点防伊蚊"},
+{id:17,name:"发热伴血小板减少综合征",category:"乙类",pathogen:"发热伴血小板减少综合征病毒（SFTSV）",transmission:"蜱虫叮咬；接触患者血液分泌物可人际传播",symptom:"高热、血小板减少、白细胞下降、多器官损伤",has_vaccine:false,vaccine_name:"无可用人用疫苗",note:"2026年4月1日本项目新增乙类；山区丘陵蜱媒高发，病死率较高"},
+{id:18,name:"炭疽",category:"乙类",pathogen:"炭疽芽孢杆菌",transmission:"接触病畜、呼吸道、消化道",symptom:"皮肤溃疡焦痂，重症可休克",has_vaccine:true,vaccine_name:"炭疽减毒活疫苗",note:"动物源性传染病"},
+{id:19,name:"细菌性和阿米巴性痢疾",category:"乙类",pathogen:"痢疾杆菌/阿米巴原虫",transmission:"消化道，污染食物水源",symptom:"腹痛腹泻、脓血便、里急后重",has_vaccine:false,vaccine_name:"无",note:"校园消化道传染病常见"},
+{id:20,name:"肺结核",category:"乙类",pathogen:"结核分枝杆菌",transmission:"呼吸道飞沫",symptom:"长期咳嗽咳痰、咯血、低热盗汗",has_vaccine:true,vaccine_name:"卡介苗（BCG）",note:"卡介苗预防儿童重症结核"},
+{id:21,name:"伤寒和副伤寒",category:"乙类",pathogen:"伤寒沙门菌",transmission:"消化道",symptom:"持续高热、玫瑰疹、肝脾肿大",has_vaccine:true,vaccine_name:"伤寒Vi多糖疫苗/联合疫苗",note:"水源爆发流行"},
+{id:22,name:"流行性脑脊髓膜炎",category:"乙类",pathogen:"脑膜炎奈瑟菌",transmission:"呼吸道飞沫",symptom:"高热、头痛呕吐、皮肤瘀斑",has_vaccine:true,vaccine_name:"流脑疫苗（A群/A+C群多糖或结合）",note:"冬春季高发"},
+{id:23,name:"百日咳",category:"乙类",pathogen:"百日咳鲍特菌",transmission:"呼吸道飞沫",symptom:"阵发性痉挛性咳嗽",has_vaccine:true,vaccine_name:"吸附无细胞百白破联合疫苗（DTPa）",note:"婴幼儿危险高"},
+{id:24,name:"白喉",category:"乙类",pathogen:"白喉棒状杆菌",transmission:"呼吸道飞沫",symptom:"咽喉假膜，窒息风险",has_vaccine:true,vaccine_name:"白喉类毒素（含于白百破疫苗）",note:"国内已少见"},
+{id:25,name:"新生儿破伤风",category:"乙类",pathogen:"破伤风梭菌",transmission:"不洁接生",symptom:"肌肉强直痉挛",has_vaccine:true,vaccine_name:"破伤风类毒素（TTCV）",note:"母婴免疫预防"},
+{id:26,name:"猩红热",category:"乙类",pathogen:"A组溶血性链球菌",transmission:"呼吸道飞沫",symptom:"发热、咽峡炎、全身弥漫红疹",has_vaccine:false,vaccine_name:"无",note:"学生群体容易暴发"},
+{id:27,name:"布鲁氏菌病",category:"乙类",pathogen:"布鲁氏菌",transmission:"接触牛羊、奶制品",symptom:"反复发热、多汗关节痛",has_vaccine:false,vaccine_name:"无（以兽用疫苗为主）",note:"牧区多见"},
+{id:28,name:"淋病",category:"乙类",pathogen:"淋病奈瑟菌",transmission:"性接触",symptom:"泌尿生殖系统化脓炎症",has_vaccine:false,vaccine_name:"无",note:"性传播疾病"},
+{id:29,name:"梅毒",category:"乙类",pathogen:"梅毒螺旋体",transmission:"性接触、母婴、血液",symptom:"皮疹、黏膜损害，晚期损伤内脏",has_vaccine:false,vaccine_name:"无",note:"可治愈"},
+{id:30,name:"钩端螺旋体病",category:"乙类",pathogen:"钩端螺旋体",transmission:"接触疫水",symptom:"发热、肌肉酸痛、黄疸",has_vaccine:true,vaccine_name:"钩端螺旋体多价疫苗",note:"洪涝后容易出现"},
+{id:31,name:"血吸虫病",category:"乙类",pathogen:"血吸虫",transmission:"接触含尾蚴疫水",symptom:"皮炎、发热、肝脾损伤",has_vaccine:false,vaccine_name:"无",note:"南方水乡流行"},
+{id:32,name:"疟疾",category:"乙类",pathogen:"疟原虫",transmission:"按蚊叮咬",symptom:"周期性寒战高热出汗",has_vaccine:true,vaccine_name:"疟疾疫苗（RTS,S/AS01）",note:"输入性病例为主，国内暂无获批人用疟疾疫苗"},
+{id:33,name:"流行性感冒",category:"丙类",pathogen:"流感病毒",transmission:"呼吸道飞沫",symptom:"突发高热、全身肌肉酸痛、乏力",has_vaccine:true,vaccine_name:"流感疫苗（三价/四价裂解灭活）",note:"校园高发传染病"},
+{id:34,name:"流行性腮腺炎",category:"丙类",pathogen:"腮腺炎病毒",transmission:"呼吸道飞沫",symptom:"腮腺肿痛、发热",has_vaccine:true,vaccine_name:"腮腺炎疫苗（含于MMR）",note:"学生群体容易聚集发病"},
+{id:35,name:"风疹",category:"丙类",pathogen:"风疹病毒",transmission:"呼吸道飞沫",symptom:"低热、全身淡红色皮疹",has_vaccine:true,vaccine_name:"风疹疫苗（含于MMR）",note:"孕妇感染会损伤胎儿"},
+{id:36,name:"急性出血性结膜炎",category:"丙类",pathogen:"肠道病毒",transmission:"接触传播",symptom:"眼红肿、畏光流泪",has_vaccine:false,vaccine_name:"无",note:"俗称红眼病，校园极易传染"},
+{id:37,name:"麻风病",category:"丙类",pathogen:"麻风分枝杆菌",transmission:"长期密切接触",symptom:"皮肤损害、外周神经损伤",has_vaccine:false,vaccine_name:"无",note:"传染性弱，可以治愈"},
+{id:38,name:"流行性和地方性斑疹伤寒",category:"丙类",pathogen:"立克次体",transmission:"虱子、跳蚤叮咬",symptom:"高热、全身皮疹",has_vaccine:false,vaccine_name:"无",note:"卫生差环境多发"},
+{id:39,name:"黑热病",category:"丙类",pathogen:"杜氏利什曼原虫",transmission:"白蛉叮咬",symptom:"长期发热、肝脾肿大",has_vaccine:false,vaccine_name:"无",note:"国内已经基本控制"},
+{id:40,name:"包虫病",category:"丙类",pathogen:"棘球绦虫幼虫",transmission:"接触犬类、污染食物",symptom:"脏器囊肿压迫症状",has_vaccine:false,vaccine_name:"无",note:"牧区多见"},
+{id:41,name:"丝虫病",category:"丙类",pathogen:"丝虫",transmission:"蚊子叮咬",symptom:"淋巴水肿、象皮肿",has_vaccine:false,vaccine_name:"无",note:"我国已消除丝虫病"},
+{id:42,name:"手足口病",category:"丙类",pathogen:"肠道病毒",transmission:"接触、飞沫",symptom:"发热，手、足、口腔疱疹溃疡",has_vaccine:true,vaccine_name:"肠道病毒71型（EV71）灭活疫苗",note:"中小学幼儿园高发"},
+{id:43,name:"其它感染性腹泻病",category:"丙类",pathogen:"病毒、细菌、真菌、原虫等",transmission:"接触、飞沫",symptom:"炎症性腹泻、分泌性腹泻、发热、粪便性状为稀便或水样便",has_vaccine:false,vaccine_name:"无",note:"人群均可发病，主要高发于婴幼儿"}
+];
+const diseaseSel = document.getElementById("diseaseSel");
+const vaccName = document.getElementById("vaccName");
+const pieCanvas = document.getElementById("pieCanvas");
+const ctx = pieCanvas.getContext("2d");
+// 饼图配色
+const pieColors = ["#2563eb","#16a34a","#f97316","#ef4444","#8b5cf6"];
+
+// 初始化下拉框（疾病列表）
+function initSelect(){
+    diseaseSel.innerHTML = "";
+    disease_db.forEach((d,i)=>{
+        let opt = document.createElement("option");
+        opt.value = i;
+        opt.text = d.name;
+        diseaseSel.appendChild(opt);
+    });
+    showVaccineName();
+    clearPie();
+}
+function showVaccineName(){
+    let d = disease_db[Number(diseaseSel.value)];
+    vaccName.textContent = d.vaccine_name + (d.has_vaccine?"（有疫苗）":"（无疫苗）");
+}
+//清空画布
+function clearPie(){
+    ctx.clearRect(0,0,pieCanvas.width,pieCanvas.height);
+}
+//绘制饼图函数
+function drawPie(dataList){
+    clearPie();
+    const cx = 150;
+    const cy =150;
+    const r = 110;
+    let totalVal = dataList.reduce((sum,item)=>sum+item.percent,0);
+    let startAngle = 0;
+    dataList.forEach((item,idx)=>{
+        let sliceAngle = 2 * Math.PI * (item.percent / totalVal);
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.arc(cx,cy,r,startAngle,startAngle+sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = pieColors[idx % pieColors.length];
+        ctx.fill();
+        ctx.strokeStyle="#fff";
+        ctx.lineWidth=2;
+        ctx.stroke();
+        // 文字标签
+        let midAngle = startAngle + sliceAngle/2;
+        let labelR = r +20;
+        let lx = cx + Math.cos(midAngle)*labelR;
+        let ly = cy + Math.sin(midAngle)*labelR;
+        ctx.fillStyle="#111";
+        ctx.font="13px system-ui";
+        ctx.fillText(`${item.name} ${item.percent}%`,lx,ly);
+        startAngle += sliceAngle;
+    })
+}
+
+// 1. 统计数据库
+function countDB(){
+    let total=disease_db.length;
+    let a=disease_db.filter(d=>d.category==="甲类").length;
+    let b=disease_db.filter(d=>d.category==="乙类").length;
+    let c=disease_db.filter(d=>d.category==="丙类").length;
+    let vac=disease_db.filter(d=>d.has_vaccine).length;
+    document.getElementById("res-stat").innerText = `==== 传染病数据库统计 ====
+全部传染病总数：${total}
+甲类：${a} 种｜乙类：${b} 种｜丙类：${c} 种
+有可用疫苗的传染病：${vac} 种`;
+}
+
+// 2. 搜索疾病
+function searchDisease(){
+    let kw=document.getElementById("searchName").value.trim();
+    let list=disease_db.filter(d=>d.name.includes(kw));
+    if(list.length===0){
+        document.getElementById("res-search").innerText="未找到匹配传染病，请更换关键词！";
+        return;
+    }
+    let txt="";
+    list.forEach(item=>{
+        txt += `
+==================== 疾病详情 ====================
+疾病名称：${item.name}
+分类：${item.category}传染病
+病原体：${item.pathogen}
+传播途径：${item.transmission}
+典型症状：${item.symptom}
+是否有疫苗：${item.has_vaccine?"✅是":"❌否"}
+疫苗名称：${item.vaccine_name}
+备注：${item.note}
+`
+    })
+    document.getElementById("res-search").innerText = txt;
+}
+
+// 3. 症状自诊【饼图版本】
+function symptomDiagnose(){
+    let symStr=document.getElementById("symInput").value.trim();
+    let symArr = symStr.split(" ").filter(x=>x!="");
+    const textDom = document.getElementById("symTextResult");
+    if(symArr.length === 0){
+        clearPie();
+        textDom.innerText="请输入症状！";
+        return;
+    }
+    let match=[];
+    for(let d of disease_db){
+        //拆分该疾病的症状词
+        let diseaseSymList = d.symptom.split(/、|，/).map(s=>s.trim()).filter(s=>s);
+        let hitCount = 0;
+        symArr.forEach(inputSym=>{
+            diseaseSymList.forEach(ds=>{
+                if(ds.includes(inputSym)) hitCount++;
+            })
+        })
+        //计算百分比：命中症状 / 该疾病全部症状
+        let percent = (hitCount / diseaseSymList.length *100).toFixed(1);
+        if(hitCount>0){
+            match.push({name:d.name,percent:Number(percent),vaccine:d.vaccine_name,hasVaccine:d.has_vaccine});
+        }
+    }
+    if(match.length===0){
+        clearPie();
+        textDom.innerText="没有匹配传染病，请前往医院就诊！";
+        return;
+    }
+    //按百分比降序排序，取前3绘制饼图
+    match.sort((x,y)=>y.percent - x.percent);
+    let top3 = match.slice(0,3);
+    drawPie(top3);
+    //文字说明
+    let txt="🔍匹配到可能传染病：\n";
+    top3.forEach((item,i)=>{
+        txt+=`${i+1}. ${item.name}：${item.percent}% ${item.hasVaccine?("（疫苗："+item.vaccine+"）"):"（无疫苗）"}\n`;
+    });
+    txt+="\n⚠️本诊断仅供参考，不能替代医生诊断！";
+    textDom.innerText=txt;
+}
+
+// 4. 疫苗接种统计 修复负数问题
+function vaccCalc(){
+    let d=disease_db[Number(diseaseSel.value)];
+    let total=Number(document.getElementById("totalStu").value);
+    let vacc=Number(document.getElementById("vaccStu").value);
+    //校验：不能为空、负数，总人数>0
+    if(isNaN(total)||isNaN(vacc)||total<=0||vacc<0){
+        document.getElementById("res-vacc").innerText="❌输入错误：人数不能为负数，总人数必须大于0！";
+        return;
+    }
+    if(vacc > total){
+        document.getElementById("res-vacc").innerText="❌错误：已接种人数不能大于班级总人数！";
+        return;
+    }
+    let rate=vacc/total*100;
+    let barLen=Math.round(rate/5);
+    let bar="█".repeat(barLen)+"-".repeat(20-barLen);
+    const herd=70;
+    let risk,maxInfect;
+    if(rate>=herd){
+        risk="低风险";
+        maxInfect=0;
+    }else{
+        risk="较高风险";
+        maxInfect = Math.max(0, Math.ceil(total * (herd - rate)/100));
+    }
+    document.getElementById("res-vacc").innerText = `==== 疫苗接种统计：${d.name} ====
+疾病类别：${d.category}传染病
+对应疫苗名称：${d.vaccine_name}${d.has_vaccine?"（有疫苗）":"（无疫苗）"}
+✅班级接种率：${rate.toFixed(2)}%
+接种率柱状图：
+[${bar}] ${rate.toFixed(1)}%
+群体免疫阈值：${herd}%
+预估需要补齐免疫人数：${maxInfect}
+风险等级：${risk}
+防控建议：${d.has_vaccine?("加强"+d.vaccine_name+"接种宣传"):"该病无可用疫苗，重点做好防护与通风消毒"}，落实晨午检。
+⚠️仅科普模型估算，**不能作为真实疫情评估依据**`;
+}
+
+initSelect();
+</script>
+</body>
+</html>
